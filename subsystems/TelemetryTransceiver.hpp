@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/Subsystem.hpp"
+#include "PayloadSubsystem.hpp"
 
 class TelemetryTransceiver : public PayloadSubsystem
 {
