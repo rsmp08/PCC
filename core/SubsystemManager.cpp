@@ -1,7 +1,7 @@
 #include "SubsystemManager.hpp"
 
-#include "../subsystems/SolarArray.hpp"
 #include "../subsystems/ADCSGyros.hpp"
+#include "../subsystems/SolarArray.hpp"
 #include "../subsystems/StarTracker.hpp"
 #include "../subsystems/TelemetryTransceiver.hpp"
 #include "../subsystems/ThermalControl.hpp"
@@ -11,122 +11,121 @@
 SubsystemManager::SubsystemManager()
     : deployment_index_(0)
 {
+    // ------------------------------------------------------------
+    // Solar Array
+    // ------------------------------------------------------------
+
     subsystems_.push_back(
         std::make_shared<SolarArray>());
+
+    // ------------------------------------------------------------
+    // ADCS Gyroscopes
+    // ------------------------------------------------------------
 
     subsystems_.push_back(
         std::make_shared<ADCSGyros>());
 
+    // ------------------------------------------------------------
+    // Star Tracker Alpha
+    // ------------------------------------------------------------
+
     subsystems_.push_back(
         std::make_shared<StarTracker>(
             "STAR_TRACKER_ALPHA",
-            "Star Tracker Alpha", ));
+            "Star Tracker Alpha"));
+
+    // ------------------------------------------------------------
+    // Star Tracker Beta
+    // ------------------------------------------------------------
 
     subsystems_.push_back(
         std::make_shared<StarTracker>(
             "STAR_TRACKER_BETA",
-            "Star Tracker Beta", ));
+            "Star Tracker Beta"));
+
+    // ------------------------------------------------------------
+    // Telemetry Transceiver
+    // ------------------------------------------------------------
 
     subsystems_.push_back(
         std::make_shared<TelemetryTransceiver>());
+
+    // ------------------------------------------------------------
+    // Thermal Control
+    // ------------------------------------------------------------
 
     subsystems_.push_back(
         std::make_shared<ThermalControl>());
 }
 
-subsystems_.push_back(
-    std::make_shared<PayloadSubsystem>(
-        "ADCS_GYROS",
-        "ADCS Gyroscopes",
-        std::chrono::seconds(12),
-        35.0,
-        0.0,
-        0.0008));
-
-subsystems_.push_back(
-    std::make_shared<PayloadSubsystem>(
-        "STAR_TRACKER_ALPHA",
-        "Star Tracker Alpha",
-        std::chrono::seconds(20),
-        18.0,
-        0.0,
-        0.0006));
-
-subsystems_.push_back(
-    std::make_shared<PayloadSubsystem>(
-        "STAR_TRACKER_BETA",
-        "Star Tracker Beta",
-        std::chrono::seconds(20),
-        18.0,
-        0.0,
-        0.0006));
-
-subsystems_.push_back(
-    std::make_shared<PayloadSubsystem>(
-        "TELEMETRY_TRANSCEIVER",
-        "Telemetry Transceiver",
-        std::chrono::seconds(15),
-        42.0,
-        0.0,
-        0.0007));
-
-subsystems_.push_back(
-    std::make_shared<PayloadSubsystem>(
-        "THERMAL_CONTROL",
-        "Thermal Management",
-        std::chrono::seconds(10),
-        25.0,
-        0.0,
-        0.0004));
-}
-
 void SubsystemManager::update()
 {
+    // ------------------------------------------------------------
+    // Update every subsystem
+    // ------------------------------------------------------------
+
     for (auto &subsystem : subsystems_)
     {
-        subsystem->update();
+        if (subsystem)
+        {
+            subsystem->update();
+        }
     }
 
-    /*
-     * Staggered deployment.
-     */
+    // ------------------------------------------------------------
+    // Staggered deployment
+    //
+    // Only one subsystem is initialized at a time.
+    // The next subsystem starts once the previous subsystem
+    // reaches NOMINAL.
+    // ------------------------------------------------------------
 
     if (deployment_index_ >= subsystems_.size())
     {
         return;
     }
 
-    auto current =
-        subsystems_[deployment_index_];
+    auto &current = subsystems_[deployment_index_];
 
-    if (current->state() ==
-        SubsystemState::OFFLINE)
+    if (!current)
     {
+        ++deployment_index_;
+        return;
+    }
 
+    // Start initialization if this subsystem is still offline.
+    if (current->state() == SubsystemState::OFFLINE)
+    {
         current->beginInitialization();
         return;
     }
 
-    if (current->state() ==
-        SubsystemState::NOMINAL)
+    // Once it reaches nominal, move to the next subsystem.
+    if (current->state() == SubsystemState::NOMINAL)
     {
-
         ++deployment_index_;
 
         if (deployment_index_ < subsystems_.size())
         {
-            subsystems_[deployment_index_]
-                ->beginInitialization();
+            auto &next = subsystems_[deployment_index_];
+
+            if (next)
+            {
+                next->beginInitialization();
+            }
         }
     }
 }
 
 std::shared_ptr<PayloadSubsystem>
-SubsystemManager::find(
-    std::string_view identifier) const
+SubsystemManager::find(std::string_view identifier) const
 {
     for (const auto &subsystem : subsystems_)
     {
+        if (!subsystem)
+        {
+            continue;
+        }
 
         if (subsystem->identifier() == identifier)
         {
@@ -155,21 +154,18 @@ bool SubsystemManager::rebootSubsystem(
         return false;
     }
 
-    const auto state =
-        subsystem->state();
+    const auto state = subsystem->state();
 
     if (state != SubsystemState::FAILED &&
         state != SubsystemState::DEGRADED)
     {
-
         result = "SUBSYSTEM IS NOT IN A RECOVERABLE FAULT STATE";
         return false;
     }
 
     subsystem->beginReboot();
 
-    result =
-        "REBOOT SEQUENCE INITIATED";
+    result = "REBOOT SEQUENCE INITIATED";
 
     return true;
 }
@@ -187,23 +183,18 @@ bool SubsystemManager::applyPatchFix(
         return false;
     }
 
-    const auto state =
-        subsystem->state();
+    const auto state = subsystem->state();
 
     if (state != SubsystemState::FAILED &&
         state != SubsystemState::DEGRADED)
     {
-
-        result =
-            "PATCH REQUIRES FAILED OR DEGRADED SUBSYSTEM";
-
+        result = "PATCH REQUIRES FAILED OR DEGRADED SUBSYSTEM";
         return false;
     }
 
     subsystem->beginPatch(patch_type);
 
-    result =
-        "PATCH SEQUENCE INITIATED";
+    result = "PATCH SEQUENCE INITIATED";
 
     return true;
 }
@@ -223,8 +214,7 @@ bool SubsystemManager::injectFault(
 
     subsystem->forceFault(severity);
 
-    result =
-        "FAULT INJECTED";
+    result = "FAULT INJECTED";
 
     return true;
 }
@@ -233,9 +223,17 @@ void SubsystemManager::beginDeployment()
 {
     deployment_index_ = 0;
 
-    if (!subsystems_.empty())
+    if (subsystems_.empty())
     {
-        subsystems_[0]->beginInitialization();
+        return;
+    }
+
+    auto &first = subsystems_[0];
+
+    if (first &&
+        first->state() == SubsystemState::OFFLINE)
+    {
+        first->beginInitialization();
     }
 }
 
@@ -250,6 +248,11 @@ double SubsystemManager::totalPowerDraw() const
 
     for (const auto &subsystem : subsystems_)
     {
+        if (!subsystem)
+        {
+            continue;
+        }
+
         total += subsystem->powerDraw();
     }
 
@@ -262,6 +265,11 @@ double SubsystemManager::totalPowerGeneration() const
 
     for (const auto &subsystem : subsystems_)
     {
+        if (!subsystem)
+        {
+            continue;
+        }
+
         total += subsystem->powerGeneration();
     }
 
@@ -273,21 +281,23 @@ void SubsystemManager::enforceLowPowerMode()
     /*
      * Keep the spacecraft's essential hardware alive.
      *
-     * Non-critical payload hardware is shut down.
+     * Non-critical payload hardware is degraded/shut down.
      */
 
     for (const auto &subsystem : subsystems_)
     {
+        if (!subsystem)
+        {
+            continue;
+        }
 
         if (subsystem->isCritical())
         {
             continue;
         }
 
-        if (subsystem->state() ==
-            SubsystemState::NOMINAL)
+        if (subsystem->state() == SubsystemState::NOMINAL)
         {
-
             subsystem->forceFault(
                 FaultSeverity::COMPONENT_DEGRADATION);
         }

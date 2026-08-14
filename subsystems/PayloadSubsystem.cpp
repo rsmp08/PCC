@@ -1,4 +1,4 @@
-#include "Subsystem.hpp"
+#include "PayloadSubsystem.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -9,13 +9,15 @@ PayloadSubsystem::PayloadSubsystem(
     std::chrono::seconds initialization_duration,
     double power_draw,
     double power_generation,
-    double failure_risk_modifier)
+    double failure_risk_modifier,
+    std::vector<int> parameters)
     : identifier_(std::move(identifier)),
       label_(std::move(label)),
       initialization_duration_(initialization_duration),
       power_draw_(power_draw),
       power_generation_(power_generation),
       failure_risk_modifier_(failure_risk_modifier),
+      parameters_(std::move(parameters)),
       state_(SubsystemState::OFFLINE),
       fault_severity_(FaultSeverity::NONE),
       health_(100.0),
@@ -45,9 +47,12 @@ void PayloadSubsystem::update()
 
     const auto now = std::chrono::steady_clock::now();
 
+    // ------------------------------------------------------------
+    // Initialization
+    // ------------------------------------------------------------
+
     if (state_ == SubsystemState::INITIALIZING)
     {
-
         const auto elapsed =
             std::chrono::duration_cast<std::chrono::seconds>(
                 now - transition_start_);
@@ -58,21 +63,39 @@ void PayloadSubsystem::update()
         }
     }
 
+    // ------------------------------------------------------------
+    // Rebooting
+    //
+    // Completion is deliberately handled by SubsystemManager.
+    // ------------------------------------------------------------
+
     if (state_ == SubsystemState::REBOOTING)
     {
-        // Completion is deliberately handled by SubsystemManager.
         return;
     }
 
+    // ------------------------------------------------------------
+    // Patching
+    //
+    // Completion is deliberately handled by SubsystemManager.
+    // ------------------------------------------------------------
+
     if (state_ == SubsystemState::PATCHING)
     {
-        // Completion is deliberately handled by SubsystemManager.
         return;
     }
 }
 
-void PayloadSubsystem::forceFault(
-    FaultSeverity severity)
+void PayloadSubsystem::update(std::chrono::seconds /*dt*/)
+{
+    // Backwards-compatible overload.
+    //
+    // The current implementation operates from steady_clock
+    // timestamps rather than using an explicit dt.
+    update();
+}
+
+void PayloadSubsystem::forceFault(FaultSeverity severity)
 {
     std::lock_guard lock(mutex_);
 
@@ -80,28 +103,39 @@ void PayloadSubsystem::forceFault(
 
     switch (severity)
     {
-
     case FaultSeverity::TRANSIENT_GLITCH:
+    {
         health_ = std::max(health_ - 2.0, 0.0);
         state_ = SubsystemState::DEGRADED;
         break;
+    }
 
     case FaultSeverity::COMPONENT_DEGRADATION:
+    {
         health_ = std::max(health_ - 20.0, 0.0);
         state_ = SubsystemState::DEGRADED;
+
         power_draw_multiplier_ = 1.25;
         telemetry_accuracy_ = 0.75;
+
         break;
+    }
 
     case FaultSeverity::CRITICAL_FAULT:
+    {
         health_ = std::max(health_ - 50.0, 0.0);
         state_ = SubsystemState::FAILED;
+
         power_draw_multiplier_ = 0.0;
         telemetry_accuracy_ = 0.0;
+
         break;
+    }
 
     case FaultSeverity::NONE:
+    {
         break;
+    }
     }
 }
 
@@ -119,8 +153,7 @@ void PayloadSubsystem::beginReboot()
     transition_start_ = std::chrono::steady_clock::now();
 }
 
-void PayloadSubsystem::beginPatch(
-    std::string_view patch_type)
+void PayloadSubsystem::beginPatch(std::string_view patch_type)
 {
     std::lock_guard lock(mutex_);
 
@@ -170,8 +203,7 @@ bool PayloadSubsystem::patchComplete() const
     return elapsed >= patch_duration_;
 }
 
-void PayloadSubsystem::completeReboot(
-    bool success)
+void PayloadSubsystem::completeReboot(bool success)
 {
     std::lock_guard lock(mutex_);
 
@@ -180,6 +212,7 @@ void PayloadSubsystem::completeReboot(
         state_ = SubsystemState::INITIALIZING;
 
         fault_severity_ = FaultSeverity::NONE;
+
         power_draw_multiplier_ = 1.0;
         telemetry_accuracy_ = 1.0;
 
@@ -201,6 +234,7 @@ void PayloadSubsystem::completePatch()
     state_ = SubsystemState::INITIALIZING;
 
     fault_severity_ = FaultSeverity::NONE;
+
     power_draw_multiplier_ = 1.0;
     telemetry_accuracy_ = 1.0;
 
@@ -226,7 +260,6 @@ std::string PayloadSubsystem::stateString() const
 {
     switch (state())
     {
-
     case SubsystemState::OFFLINE:
         return "OFFLINE";
 
@@ -256,7 +289,6 @@ std::string PayloadSubsystem::severityString() const
 {
     switch (faultSeverity())
     {
-
     case FaultSeverity::NONE:
         return "NONE";
 
@@ -395,19 +427,30 @@ double PayloadSubsystem::failureRiskModifier() const
 void PayloadSubsystem::setHealth(double value)
 {
     std::lock_guard lock(mutex_);
-    health_ = std::clamp(value, 0.0, 100.0);
+
+    health_ = std::clamp(
+        value,
+        0.0,
+        100.0);
 }
 
 void PayloadSubsystem::setPowerDrawMultiplier(double multiplier)
 {
     std::lock_guard lock(mutex_);
-    power_draw_multiplier_ = std::max(0.0, multiplier);
+
+    power_draw_multiplier_ =
+        std::max(0.0, multiplier);
 }
 
 void PayloadSubsystem::setTelemetryAccuracy(double accuracy)
 {
     std::lock_guard lock(mutex_);
-    telemetry_accuracy_ = std::clamp(accuracy, 0.0, 1.0);
+
+    telemetry_accuracy_ =
+        std::clamp(
+            accuracy,
+            0.0,
+            1.0);
 }
 
 double PayloadSubsystem::telemetryAccuracy() const
@@ -442,20 +485,16 @@ bool PayloadSubsystem::isCritical() const
            identifier_ == "POWER_MANAGER";
 }
 
-void PayloadSubsystem::update(std::chrono::seconds /*dt*/)
-{
-    // Backwards-compatible overload; ignore dt and call the single-step update()
-    update();
-}
-
 void PayloadSubsystem::degrade()
 {
-    forceFault(FaultSeverity::COMPONENT_DEGRADATION);
+    forceFault(
+        FaultSeverity::COMPONENT_DEGRADATION);
 }
 
 void PayloadSubsystem::fail()
 {
-    forceFault(FaultSeverity::CRITICAL_FAULT);
+    forceFault(
+        FaultSeverity::CRITICAL_FAULT);
 }
 
 void PayloadSubsystem::reboot()
