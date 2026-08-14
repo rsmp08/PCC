@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Subsystem.hpp"
+#include "../subsystems/PayloadSubsystem.hpp"
 
+#include <cstddef>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,11 +15,13 @@ public:
 
     void update();
 
-    std::shared_ptr<PayloadSubsystem>
-    find(std::string_view identifier) const;
+    void beginDeployment();
+    bool deploymentComplete() const;
 
-    std::vector<std::shared_ptr<PayloadSubsystem>>
-    all() const;
+    std::shared_ptr<PayloadSubsystem> find(
+        std::string_view identifier) const;
+
+    std::vector<std::shared_ptr<PayloadSubsystem>> all() const;
 
     bool rebootSubsystem(
         std::string_view subsystem_id,
@@ -35,20 +37,13 @@ public:
         FaultSeverity severity,
         std::string &result);
 
-    void beginDeployment();
-
-    bool deploymentComplete() const;
-
     double totalPowerDraw() const;
     double totalPowerGeneration() const;
 
     void enforceLowPowerMode();
 
 private:
-    std::vector<std::shared_ptr<PayloadSubsystem>>
-        subsystems_;
-
-    mutable std::mutex mutex_;
+    std::vector<std::shared_ptr<PayloadSubsystem>> subsystems_;
 
     std::size_t deployment_index_;
 };

@@ -1,63 +1,83 @@
 #include "SubsystemManager.hpp"
 
+#include "../subsystems/SolarArray.hpp"
+#include "../subsystems/ADCSGyros.hpp"
+#include "../subsystems/StarTracker.hpp"
+#include "../subsystems/TelemetryTransceiver.hpp"
+#include "../subsystems/ThermalControl.hpp"
+
 #include <algorithm>
 
 SubsystemManager::SubsystemManager()
     : deployment_index_(0)
 {
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
-            "SOLAR_ARRAY",
-            "Solar Array",
-            std::chrono::seconds(8),
-            5.0,
-            850.0,
-            0.0005));
+        std::make_shared<SolarArray>());
 
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
-            "ADCS_GYROS",
-            "ADCS Gyroscopes",
-            std::chrono::seconds(12),
-            35.0,
-            0.0,
-            0.0008));
+        std::make_shared<ADCSGyros>());
 
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
+        std::make_shared<StarTracker>(
             "STAR_TRACKER_ALPHA",
-            "Star Tracker Alpha",
-            std::chrono::seconds(20),
-            18.0,
-            0.0,
-            0.0006));
+            "Star Tracker Alpha", ));
 
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
+        std::make_shared<StarTracker>(
             "STAR_TRACKER_BETA",
-            "Star Tracker Beta",
-            std::chrono::seconds(20),
-            18.0,
-            0.0,
-            0.0006));
+            "Star Tracker Beta", ));
 
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
-            "TELEMETRY_TRANSCEIVER",
-            "Telemetry Transceiver",
-            std::chrono::seconds(15),
-            42.0,
-            0.0,
-            0.0007));
+        std::make_shared<TelemetryTransceiver>());
 
     subsystems_.push_back(
-        std::make_shared<PayloadSubsystem>(
-            "THERMAL_CONTROL",
-            "Thermal Management",
-            std::chrono::seconds(10),
-            25.0,
-            0.0,
-            0.0004));
+        std::make_shared<ThermalControl>());
+}
+
+subsystems_.push_back(
+    std::make_shared<PayloadSubsystem>(
+        "ADCS_GYROS",
+        "ADCS Gyroscopes",
+        std::chrono::seconds(12),
+        35.0,
+        0.0,
+        0.0008));
+
+subsystems_.push_back(
+    std::make_shared<PayloadSubsystem>(
+        "STAR_TRACKER_ALPHA",
+        "Star Tracker Alpha",
+        std::chrono::seconds(20),
+        18.0,
+        0.0,
+        0.0006));
+
+subsystems_.push_back(
+    std::make_shared<PayloadSubsystem>(
+        "STAR_TRACKER_BETA",
+        "Star Tracker Beta",
+        std::chrono::seconds(20),
+        18.0,
+        0.0,
+        0.0006));
+
+subsystems_.push_back(
+    std::make_shared<PayloadSubsystem>(
+        "TELEMETRY_TRANSCEIVER",
+        "Telemetry Transceiver",
+        std::chrono::seconds(15),
+        42.0,
+        0.0,
+        0.0007));
+
+subsystems_.push_back(
+    std::make_shared<PayloadSubsystem>(
+        "THERMAL_CONTROL",
+        "Thermal Management",
+        std::chrono::seconds(10),
+        25.0,
+        0.0,
+        0.0004));
 }
 
 void SubsystemManager::update()

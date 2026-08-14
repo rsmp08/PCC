@@ -37,17 +37,11 @@ public:
 
     virtual ~PayloadSubsystem() = default;
 
+    virtual void update();
+
     void beginInitialization();
-    void update();
-    // Compatibility overload used by older callers
-    void update(std::chrono::seconds /*dt*/);
 
     void forceFault(FaultSeverity severity);
-
-    // Convenience helpers used in older UI/controller code
-    void degrade();
-    void fail();
-    void reboot();
 
     void beginReboot();
     void beginPatch(std::string_view patch_type);
@@ -61,31 +55,23 @@ public:
     SubsystemState state() const;
     FaultSeverity faultSeverity() const;
 
-    std::string stateString() const;
-    std::string severityString() const;
-
     const std::string &identifier() const;
     const std::string &label() const;
-
-    double initializationProgress() const;
-    double patchProgress() const;
-    double rebootProgress() const;
 
     double powerDraw() const;
     double powerGeneration() const;
 
     double health() const;
-    double failureRiskModifier() const;
-
-    void setHealth(double value);
-    void setPowerDrawMultiplier(double multiplier);
-    void setTelemetryAccuracy(double accuracy);
-
     double telemetryAccuracy() const;
 
     bool isActive() const;
     bool isOperational() const;
     bool isCritical() const;
+
+protected:
+    // Derived subsystems can use these
+    double health_;
+    double telemetry_accuracy_;
 
 private:
     std::string identifier_;
@@ -95,7 +81,6 @@ private:
 
     double power_draw_;
     double power_generation_;
-
     double failure_risk_modifier_;
 
     mutable std::mutex mutex_;
@@ -103,11 +88,8 @@ private:
     SubsystemState state_;
     FaultSeverity fault_severity_;
 
-    double health_;
     double power_draw_multiplier_;
-    double telemetry_accuracy_;
 
-    std::chrono::steady_clock::time_point operation_start_;
     std::chrono::steady_clock::time_point transition_start_;
 
     std::chrono::seconds reboot_duration_;
