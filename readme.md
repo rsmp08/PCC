@@ -74,10 +74,3 @@ g++ -std=c++17 -O2 -I. ui/entry_main.cpp ui/main_gui.cpp ui/PccGui.cpp core/Subs
 
 - `build.ps1` — PowerShell script to build console and GUI targets.
 - `build.sh` — POSIX shell script (attempts Windows GUI builds on Windows hosts).
-
-## Next steps (suggested)
-
-- Add VS Code tasks for quick build/run
-- Fix remaining compiler warnings
-- Add unit tests for core logic
-- Add CI build on Windows
