@@ -1,7 +1,7 @@
 #include "PayloadController.hpp"
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 
@@ -29,7 +29,8 @@ PayloadController::PayloadController(
       random_engine_(std::random_device{}()),
       random_distribution_(0.0, 1.0),
       deployment_index_(0),
-      station_keeping_duration_(10.0)
+      station_keeping_duration_(10.0),
+      power_manager_()
 {
     /*
      * Generic payload hardware configuration.
@@ -95,6 +96,15 @@ PayloadController::PayloadController(
             25.0,
             0.0,
             0.00001f));
+
+    /*
+     * Power system configuration.
+     *
+     * These are currently simple simulation values.
+     * We can make them configurable later.
+     */
+    power_manager_.setBatteryCapacity(1000.0);
+    power_manager_.setBatteryCharge(500.0);
 }
 
 PayloadController::~PayloadController()
@@ -208,12 +218,19 @@ void PayloadController::simulationLoop()
         updateMissionPhase();
         updateDeployment();
         updateOrbitalTelemetry();
-        updatePowerTelemetry();
 
+        /*
+         * Update subsystem state first.
+         *
+         * Power telemetry is calculated afterwards so the
+         * current subsystem state is reflected immediately.
+         */
         for (auto &subsystem : subsystems_)
         {
             subsystem->update(1s);
         }
+
+        updatePowerTelemetry();
 
         std::this_thread::sleep_for(1s);
     }
@@ -239,7 +256,6 @@ void PayloadController::updateMissionPhase()
 
     switch (mission_phase_)
     {
-
     case MissionPhase::STATION_KEEPING_WAIT:
 
         if (met >= station_keeping_duration_)
@@ -290,11 +306,9 @@ void PayloadController::updateDeployment()
 
     if (deployment_index_ == 0)
     {
-
         if (subsystems_[0]->state() ==
             SubsystemState::OFFLINE)
         {
-
             subsystems_[0]->beginInitialization();
         }
     }
@@ -302,7 +316,6 @@ void PayloadController::updateDeployment()
     if (subsystems_[deployment_index_]->state() ==
         SubsystemState::NOMINAL)
     {
-
         deployment_index_++;
 
         if (deployment_index_ < subsystems_.size())
@@ -330,11 +343,9 @@ void PayloadController::updateDeployment()
     if (elapsed > 120 &&
         deployment_index_ < subsystems_.size())
     {
-
         if (subsystems_[deployment_index_]->state() ==
             SubsystemState::INITIALIZING)
         {
-
             subsystems_[deployment_index_]->degrade();
         }
     }
@@ -416,7 +427,6 @@ void PayloadController::updatePowerTelemetry()
 
     for (const auto &subsystem : subsystems_)
     {
-
         if (subsystem->isActive())
         {
             subsystem_draw += subsystem->powerDraw();
@@ -453,9 +463,29 @@ void PayloadController::updatePowerTelemetry()
 
     solar_generation *= eclipse_factor;
 
+    /*
+     * Feed the current spacecraft power state
+     * into PowerManager.
+     */
+    power_manager_.setGeneration(solar_generation);
+    power_manager_.setConsumption(subsystem_draw);
+
+    /*
+     * One simulation tick = one second.
+     */
+    power_manager_.update(1.0);
+
     double net =
-        solar_generation -
-        subsystem_draw;
+        power_manager_.getPowerMargin();
+
+    double battery_charge =
+        power_manager_.getBatteryCharge();
+
+    double battery_capacity =
+        power_manager_.getBatteryCapacity();
+
+    double battery_percentage =
+        power_manager_.getBatteryChargePercentage();
 
     std::lock_guard lock(mutex_);
 
@@ -467,6 +497,15 @@ void PayloadController::updatePowerTelemetry()
 
     telemetry_.net_power_w =
         net;
+
+    telemetry_.battery_charge_wh =
+        battery_charge;
+
+    telemetry_.battery_capacity_wh =
+        battery_capacity;
+
+    telemetry_.battery_charge_percentage =
+        battery_percentage;
 }
 
 void PayloadController::performFailureChecks()
@@ -480,7 +519,6 @@ void PayloadController::performFailureChecks()
 
     for (auto &subsystem : subsystems_)
     {
-
         if (!subsystem->isOperational())
         {
             continue;
@@ -492,7 +530,6 @@ void PayloadController::performFailureChecks()
 
         if (random_distribution_(random_engine_) < chance)
         {
-
             /*
              * 50/50 chance of degradation or complete failure.
              */

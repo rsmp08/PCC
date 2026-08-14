@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../core/PowerManager.hpp"
 #include "../subsystems/PayloadSubsystem.hpp"
 
 #include <atomic>
@@ -31,9 +32,14 @@ struct Telemetry
     double altitude_km = 400.0;
     double orbital_phase_deg = 0.0;
     double signal_dbm = -120.0;
+
     double solar_generation_w = 0.0;
     double subsystem_draw_w = 0.0;
     double net_power_w = 0.0;
+
+    double battery_charge_wh = 0.0;
+    double battery_capacity_wh = 0.0;
+    double battery_charge_percentage = 0.0;
 };
 
 class PayloadController
@@ -100,4 +106,7 @@ private:
     std::chrono::steady_clock::time_point deployment_start_;
 
     double station_keeping_duration_;
+
+    // Power management
+    PowerManager power_manager_;
 };
